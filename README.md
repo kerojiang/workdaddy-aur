@@ -65,14 +65,18 @@ ArchWiki《[AUR submission guidelines](https://wiki.archlinux.org/title/AUR_subm
 
 本包直接解包上游官方预编译 DEB 的 `data.tar.xz`，不本地编译，因此必须带 `-bin`。官方 DEB 的 control 归档中只有 `./control`、没有 maintainer scripts，所以解包时无需模拟 dpkg 维护脚本。
 
-### 本包补丁（pkgrel ≥ 4）
+### 本包改动（pkgrel ≥ 4，pkgrel 5 起不再依赖 `patch` 命令）
 
-| 补丁 | 解决的问题 | 细节 |
+两处改动直接写在 `PKGBUILD` 的 `package()` 里：图标用 `sed` 单行替换，退出守卫用 heredoc 片段经 `sed r` 插入到 `startClientRunningMonitor();` 之后。**不使用 `patch` 可执行文件、不引入额外 source 文件**——pkgrel 4 曾因 `patch` 命令缺失导致用户构建失败（`/var/log/pacman.log` 15:49 需手动安装 `core/patch`），pkgrel 5 已在「`patch: NOT FOUND`」环境下用 `makepkg -f --nodeps --noconfirm` 完整构建通过。
+
+| 改动 | 解决的问题 | 细节 |
 | --- | --- | --- |
-| `workdaddy-default-icon.patch` | 桌面启动器图标空白 | 上游 `scripts/install-desktop-linux.sh:24` 引用 `~/.local/share/workdaddy/icons/workdaddy-launcher.png`，但整个 payload 没有任何脚本会生成该文件；缺失时回退 `Icon=workbuddy`，而 `workbuddy-agent` 提供客户端时系统不存在该图标名。补丁把回退值改为 `workdaddy`——官方 DEB 自带 `/usr/share/icons/hicolor/1024x1024/apps/workdaddy.png`，本包必然安装 |
-| `workdaddy-exit-guard.patch` | WorkBuddy 退出后 daemon 常驻不退 | 上游 daemon 由 `install-linux.sh:224` 的 `setsid nohup` 脱离进程树，且 `daemon.js` 没有任何「客户端退出 → 自杀」逻辑。补丁在 `startClientRunningMonitor()` 之后复用既有 `clientRunningState`（15s 周期探测 `linuxWorkBuddyPids`，按 argv0/realpath 精确匹配）：启动宽限 5 分钟 → 连续 4 次探测为 false（约 60s）→ 走 SIGTERM 清理流程退出。探测失败(null)与数据过旧不判定，单次误报自动清零 |
+| 默认图标 | 桌面启动器图标空白 | 上游 `scripts/install-desktop-linux.sh:24` 引用 `~/.local/share/workdaddy/icons/workdaddy-launcher.png`，但整个 payload 没有任何脚本会生成该文件；缺失时回退 `Icon=workbuddy`，而 `workbuddy-agent` 提供客户端时系统不存在该图标名。改为回退 `workdaddy`——官方 DEB 自带 `/usr/share/icons/hicolor/1024x1024/apps/workdaddy.png`，本包必然安装 |
+| 退出守卫 | WorkBuddy 退出后 daemon 常驻不退 | 上游 daemon 由 `install-linux.sh:224` 的 `setsid nohup` 脱离进程树，且 `daemon.js` 没有任何「客户端退出 → 自杀」逻辑。守卫复用既有 `clientRunningState`（15s 周期探测 `linuxWorkBuddyPids`，按 argv0/realpath 精确匹配）：启动宽限 5 分钟 → 连续 4 次探测为 false（约 60s）→ 走 SIGTERM 清理流程退出。探测失败(null)与数据过旧不判定，单次误报自动清零 |
 
-守卫环境变量：`WORKDADDY_EXIT_GUARD=0` 关闭；`WORKDADDY_EXIT_GUARD_GRACE_MS` / `WORKDADDY_EXIT_GUARD_INTERVAL_MS` 调整宽限与轮询间隔。`scripts/sync-release.py` 只重写 DEB 的 `sha256sums_x86_64/aarch64` 两行，补丁校验和在版本升级时自动保留。
+守卫环境变量：`WORKDADDY_EXIT_GUARD=0` 关闭；`WORKDADDY_EXIT_GUARD_GRACE_MS` / `WORKDADDY_EXIT_GUARD_INTERVAL_MS` 调整宽限与轮询间隔。`scripts/sync-release.py` 只重写 DEB 的 `sha256sums_x86_64/aarch64` 两行，不触碰 `package()` 内的改动，版本升级时自动保留。
+
+> 注意：`zenity` 是 optdepends。未安装时 `launch-gui-linux.sh` 的 `ZENITY` 为空，桌面入口 `Terminal=false` 会吞掉所有输出，点击图标将没有任何可见反馈。需要图形弹窗时执行 `pacman -S zenity`。
 
 ---
 
@@ -80,9 +84,7 @@ ArchWiki《[AUR submission guidelines](https://wiki.archlinux.org/title/AUR_subm
 
 | 文件 | 作用 |
 | --- | --- |
-| `PKGBUILD` | 解包对应架构的官方 DEB，应用 两个补丁，并安装上游许可证到 `/usr/share/licenses/workdaddy-bin/LICENSE` |
-| `workdaddy-default-icon.patch` | 启动器图标回退到系统 hicolor 的 workdaddy 图标 |
-| `workdaddy-exit-guard.patch` | WorkBuddy 退出后 daemon 自动完全退出（可环境变量关闭） |
+| `PKGBUILD` | 解包对应架构的官方 DEB，用 sed 应用两处改动（默认图标回退 + 退出守卫），并安装上游许可证到 `/usr/share/licenses/workdaddy-bin/LICENSE` |
 | `.SRCINFO` | 由 `makepkg --printsrcinfo` 生成，AUR 必需 |
 | `LICENSE` | 本仓库 PKGBUILD 与脚本的 0BSD 许可证 |
 | `LICENSE.upstream` | 上游 tag `1.2.22` 的 LICENSE 原文，随包安装 |
