@@ -160,7 +160,7 @@ WORKDADDY_DEB_DIR=/path/to/debs python3 scripts/sync-release.py --repo-root .
 | CI 发现更新路径 | Run `43680284204`（`force=true` 模拟），`conclusion: success`，提交步骤与 AUR 发布步骤均为 `success` |
 | AUR 首发 | `git push origin master` 返回 `* [new branch] master -> master`；AUR 仓库 HEAD `233c078`；包页面 HTTP 200 且显示 `workdaddy-bin 1.2.22-1`、`AGPL-3.0-or-later`；远端 4 个文件与本地 SHA-256 逐项一致 |
 | 端到端闭环 | Run `43681612115`，`conclusion: success`；日志显示 `AUR_SSH_PRIVATE_KEY: ***` 已注入、`Cloning into ...` 成功、`AUR already matches local files (version 1.2.22); nothing to push`，无 `Permission denied (publickey)` |
-| optdepends 双列 | 本次把 `workbuddy-agent` 列为 `workbuddy` 的替代客户端，并按 `PKGBUILD(5)`「incremented for intermediate PKGBUILD updates」将 `pkgrel` 递增至 2；`makepkg -f --nodeps --noconfirm` 产物 `.PKGINFO` 含两条 `optdepend`：`workbuddy`、`workbuddy-agent`；无 `control.tar` / `debian-binary` / `data.tar` 残留 |
+| optdepends 双列 | 本次把 `workbuddy-agent` 列为 `workbuddy` 的替代客户端，并按 `PKGBUILD(5)`「incremented for intermediate PKGBUILD updates」将 `pkgrel` 递增至 2；`makepkg -f --nodeps --noconfirm` 产物 `.PKGINFO` 含两条 `optdepend`：`workbuddy`、`workbuddy-agent`；无 `control.tar` / `debian-binary` / `data.tar` 残留。GitHub commit `93f7eee`；CI Run `43682922558` `conclusion: success`，日志 `233c078..ef05a74 master -> master`、`pushed workdaddy-bin 1.2.22 to AUR`；AUR HEAD `ef05a74`，4 个文件与本地 SHA-256 一致；包页面 HTTP 200 显示 `1.2.22-2` 且含 `workbuddy-agent` |
 
 AUR RPC 索引在首发后未即时刷新（`type=info` 仍返回 `resultcount:0`），包页面与 git 仓库已生效；`yay` / `paru` 等依赖 RPC 的客户端需等待 AUR 索引更新后才能搜到该包。
 
