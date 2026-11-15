@@ -5,7 +5,7 @@
 把 [babygoton/WorkDaddy](https://github.com/babygoton/WorkDaddy) 官方 Linux DEB 重打包为 Arch Linux AUR 包 **`workdaddy-bin`**，并由 GitHub Actions **每天检查一次**上游 Release：发现新版本后自动更新 `PKGBUILD` / `.SRCINFO`、提交回本仓库、推送到 AUR。
 
 - 上游：<https://github.com/babygoton/WorkDaddy>
-- AUR 页面：<https://aur.archlinux.org/packages/workdaddy-bin>（已发布 `1.2.22-1`，维护者 `kerojiang`）
+- AUR 页面：<https://aur.archlinux.org/packages/workdaddy-bin>（当前 `1.2.22-2`，维护者 `kerojiang`）
 - 上游许可证：`AGPL-3.0-or-later`；本仓库打包脚本许可证：`0BSD`
 
 > **范围**：仅 WorkDaddy 主版本（`WorkDaddy_<版本>_amd64.deb` / `_arm64.deb`）。上游 Release 中的 WorkDaddy-AI、CodeDaddy、CodeDaddy-CN 一律不打包。
@@ -30,7 +30,16 @@ cd workdaddy-bin
 makepkg -si
 ```
 
-支持 `x86_64` 与 `aarch64`。包提供 `workdaddy`、与 `workdaddy` 冲突，可选依赖为 `workbuddy`（WorkBuddy 桌面客户端）。运行时依赖由 `PKGBUILD` 的 `depends` 声明：`bash`、`ca-certificates`、`curl`、`gcc-libs`、`glibc`、`hicolor-icon-theme`、`procps-ng`、`util-linux`、`xdg-utils`、`zenity`。
+支持 `x86_64` 与 `aarch64`。包提供 `workdaddy`、与 `workdaddy` 冲突。可选依赖为 WorkBuddy 桌面客户端，下面两个包**任选其一**，二者互斥、不可同时安装：
+
+| 可选依赖 | 说明 |
+| --- | --- |
+| `workbuddy` | 官方 DEB 解包，用系统 `electron` 运行 |
+| `workbuddy-agent` | 同一官方 DEB 的原生二进制版本，AUR 上声明 `conflicts=('workbuddy')`，可替代 `workbuddy` |
+
+依据：两个 AUR 包的 `package()` 都安装 `/usr/bin/workbuddy` → `/opt/WorkBuddy/workbuddy` 与 `usr/share/applications/workbuddy.desktop`；上游 README 第 143 行「请先安装并登录同架构的官方客户端」、第 256 行「不修改 WorkBuddy 二进制」；官方 DEB `control` 的 `Depends` 不含 WorkBuddy 客户端。`PKGBUILD(5)` 原文：*"optdepends are currently for informational purposes only and are not utilized by pacman during dependency resolution."* —— 因此只能双列提示，不能让 pacman 自动把其中一个解析为另一个；两个包的 `provides=()` 均为空，也不存在可用的虚拟包名。
+
+运行时依赖由 `PKGBUILD` 的 `depends` 声明：`bash`、`ca-certificates`、`curl`、`gcc-libs`、`glibc`、`hicolor-icon-theme`、`procps-ng`、`util-linux`、`xdg-utils`、`zenity`。
 
 ### 为什么包名带 `-bin`
 
@@ -108,7 +117,7 @@ AUR 推送只走 SSH 公钥认证，不使用账号密码。ArchWiki 原文：
 >
 > *"The AUR only allows pushes to the master branch."*
 
-**当前状态**：`workdaddy-bin 1.2.22-1` 已发布，AUR 仓库 `master` 为 `233c078`。首发使用本机 `~/.ssh/aur`，该密钥已绑定 AUR 账号 `kerojiang`（`ssh -T aur@aur.archlinux.org` 返回 `Welcome to AUR, kerojiang!`）。同一把私钥已用 libsodium sealed box 加密写入 GitHub Actions Secret `AUR_SSH_PRIVATE_KEY`（GitHub API 返回 `201 Created`），GitHub runner 用它成功 clone 了 AUR 仓库（Run `43681612115` 日志：`AUR_SSH_PRIVATE_KEY: ***`、`Cloning into ...`、`AUR already matches local files`）。
+**当前状态**：`workdaddy-bin 1.2.22-2` 已发布（首发为 `1.2.22-1`，AUR 首发提交 `233c078`）。首发使用本机 `~/.ssh/aur`，该密钥已绑定 AUR 账号 `kerojiang`（`ssh -T aur@aur.archlinux.org` 返回 `Welcome to AUR, kerojiang!`）。同一把私钥已用 libsodium sealed box 加密写入 GitHub Actions Secret `AUR_SSH_PRIVATE_KEY`（GitHub API 返回 `201 Created`），GitHub runner 用它成功 clone 了 AUR 仓库（Run `43681612115` 日志：`AUR_SSH_PRIVATE_KEY: ***`、`Cloning into ...`、`AUR already matches local files`）。
 
 | Secret | 状态 | 说明 |
 | --- | --- | --- |
@@ -146,11 +155,12 @@ WORKDADDY_DEB_DIR=/path/to/debs python3 scripts/sync-release.py --repo-root .
 | 项目 | 结果 |
 | --- | --- |
 | 实构 | `makepkg -f --nodeps --noconfirm` 通过；产物 129 个文件；检查 `control.tar` / `debian-binary` / `data.tar` 无残留 |
-| 回归 | 模拟本地为 `1.2.21` 且校验和置零后运行同步脚本，`PKGBUILD` 与原文逐字节一致，`.SRCINFO` 与 `makepkg --printsrcinfo` 逐字节一致，二次运行输出 `changed=false` |
+| 回归 | 模拟本地为 `1.2.21` 且校验和置零后运行同步脚本，两条 `optdepends` 全部保留、`.SRCINFO` 与 `makepkg --printsrcinfo` 逐字节一致；日常路径运行时 `PKGBUILD` / `.SRCINFO` 的 SHA-256 不变，输出 `changed=false` |
 | CI 日常路径 | Run `43680253465`，`conclusion: success`，无版本变化时提交步骤 `skipped` |
 | CI 发现更新路径 | Run `43680284204`（`force=true` 模拟），`conclusion: success`，提交步骤与 AUR 发布步骤均为 `success` |
 | AUR 首发 | `git push origin master` 返回 `* [new branch] master -> master`；AUR 仓库 HEAD `233c078`；包页面 HTTP 200 且显示 `workdaddy-bin 1.2.22-1`、`AGPL-3.0-or-later`；远端 4 个文件与本地 SHA-256 逐项一致 |
 | 端到端闭环 | Run `43681612115`，`conclusion: success`；日志显示 `AUR_SSH_PRIVATE_KEY: ***` 已注入、`Cloning into ...` 成功、`AUR already matches local files (version 1.2.22); nothing to push`，无 `Permission denied (publickey)` |
+| optdepends 双列 | 本次把 `workbuddy-agent` 列为 `workbuddy` 的替代客户端，并按 `PKGBUILD(5)`「incremented for intermediate PKGBUILD updates」将 `pkgrel` 递增至 2；`makepkg -f --nodeps --noconfirm` 产物 `.PKGINFO` 含两条 `optdepend`：`workbuddy`、`workbuddy-agent`；无 `control.tar` / `debian-binary` / `data.tar` 残留 |
 
 AUR RPC 索引在首发后未即时刷新（`type=info` 仍返回 `resultcount:0`），包页面与 git 仓库已生效；`yay` / `paru` 等依赖 RPC 的客户端需等待 AUR 索引更新后才能搜到该包。
 
