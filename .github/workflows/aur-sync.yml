@@ -1,0 +1,62 @@
+name: Sync WorkDaddy release to AUR
+
+on:
+  schedule:
+    # Every 3 hours. GitHub may delay scheduled runs under load.
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Re-apply the current upstream release (retry a failed AUR push)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: workdaddy-aur-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync upstream release into PKGBUILD / .SRCINFO
+        id: sync
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python3 scripts/sync-release.py --repo-root . --force
+          else
+            python3 scripts/sync-release.py --repo-root .
+          fi
+
+      - name: Commit version bump back to GitHub
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          git config user.name 'workdaddy-aur-bot'
+          git config user.email 'kero_jiang@126.com'
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo 'No file changes to commit.'
+          else
+            git commit -m "chore: sync WorkDaddy ${{ steps.sync.outputs.version }}"
+            git push
+          fi
+
+      - name: Ensure AUR matches this commit
+        if: always() && steps.sync.outcome == 'success'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo '::warning::AUR_SSH_PRIVATE_KEY is not configured yet; skipping AUR publish'
+            exit 0
+          fi
+          bash scripts/publish-aur.sh "${{ steps.sync.outputs.version }}"
