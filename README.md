@@ -5,7 +5,7 @@
 把 [babygoton/WorkDaddy](https://github.com/babygoton/WorkDaddy) 官方 Linux DEB 重打包为 Arch Linux AUR 包 **`workdaddy-bin`**，并由 GitHub Actions **每天检查一次**上游 Release：发现新版本后自动更新 `PKGBUILD` / `.SRCINFO`、提交回本仓库、推送到 AUR。
 
 - 上游：<https://github.com/babygoton/WorkDaddy>
-- AUR 页面：<https://aur.archlinux.org/packages/workdaddy-bin>（首次发布后可用）
+- AUR 页面：<https://aur.archlinux.org/packages/workdaddy-bin>（已发布 `1.2.22-1`，维护者 `kerojiang`）
 - 上游许可证：`AGPL-3.0-or-later`；本仓库打包脚本许可证：`0BSD`
 
 > **范围**：仅 WorkDaddy 主版本（`WorkDaddy_<版本>_amd64.deb` / `_arm64.deb`）。上游 Release 中的 WorkDaddy-AI、CodeDaddy、CodeDaddy-CN 一律不打包。
@@ -100,7 +100,7 @@ on:
 
 ---
 
-## 首次上线需要配置的两处
+## AUR 密钥配置（已完成）
 
 AUR 推送只走 SSH 公钥认证，不使用账号密码。ArchWiki 原文：
 
@@ -108,16 +108,15 @@ AUR 推送只走 SSH 公钥认证，不使用账号密码。ArchWiki 原文：
 >
 > *"The AUR only allows pushes to the master branch."*
 
-1. **AUR**：生成一对专用密钥（`ssh-keygen -t ed25519`），登录 AUR → My Account → SSH Public Key 填入公钥并保存。
-2. **GitHub**：仓库 Settings → Secrets and variables → Actions → New repository secret，添加：
+**当前状态**：`workdaddy-bin 1.2.22-1` 已发布，AUR 仓库 `master` 为 `233c078`。首发使用本机 `~/.ssh/aur`，该密钥已绑定 AUR 账号 `kerojiang`（`ssh -T aur@aur.archlinux.org` 返回 `Welcome to AUR, kerojiang!`）。同一把私钥已用 libsodium sealed box 加密写入 GitHub Actions Secret `AUR_SSH_PRIVATE_KEY`（GitHub API 返回 `201 Created`），GitHub runner 用它成功 clone 了 AUR 仓库（Run `43681612115` 日志：`AUR_SSH_PRIVATE_KEY: ***`、`Cloning into ...`、`AUR already matches local files`）。
 
-   | Secret | 必填 | 说明 |
-   | --- | --- | --- |
-   | `AUR_SSH_PRIVATE_KEY` | 是 | 上一步对应的私钥全文，含 `-----BEGIN OPENSSH PRIVATE KEY-----` 头尾 |
-   | `AUR_USERNAME` | 否 | AUR 提交使用的 git user.name，默认 `jiangjie` |
-   | `AUR_EMAIL` | 否 | AUR 提交使用的 git user.email，默认 `kero_jiang@126.com` |
+| Secret | 状态 | 说明 |
+| --- | --- | --- |
+| `AUR_SSH_PRIVATE_KEY` | 已配置 | 与 AUR 账号绑定密钥对应的私钥全文，含 `-----BEGIN OPENSSH PRIVATE KEY-----` 头尾 |
+| `AUR_USERNAME` | 未配置 | AUR 提交使用的 git user.name，默认 `jiangjie`；不影响推送权限 |
+| `AUR_EMAIL` | 未配置 | AUR 提交使用的 git user.email，默认 `kero_jiang@126.com` |
 
-未配置 `AUR_SSH_PRIVATE_KEY` 时，发布步骤打印 warning 后安全跳过，不影响仓库其余步骤。配置完成后，等当天定时运行或手动点一次 *Run workflow* 即完成首发。
+未配置 `AUR_SSH_PRIVATE_KEY` 时，发布步骤打印 warning 后安全跳过，不影响仓库其余步骤。如需轮换密钥：在 AUR → My Account → SSH Public Key 追加新公钥（AUR 支持多公钥换行分隔），再到 GitHub → Settings → Secrets and variables → Actions 更新同名 Secret。
 
 `publish-aur.sh` 会把 AUR 主机密钥固定写入 `known_hosts`（`StrictHostKeyChecking yes`），避免依赖 runner 上不可信的主机密钥。
 
@@ -150,6 +149,10 @@ WORKDADDY_DEB_DIR=/path/to/debs python3 scripts/sync-release.py --repo-root .
 | 回归 | 模拟本地为 `1.2.21` 且校验和置零后运行同步脚本，`PKGBUILD` 与原文逐字节一致，`.SRCINFO` 与 `makepkg --printsrcinfo` 逐字节一致，二次运行输出 `changed=false` |
 | CI 日常路径 | Run `43680253465`，`conclusion: success`，无版本变化时提交步骤 `skipped` |
 | CI 发现更新路径 | Run `43680284204`（`force=true` 模拟），`conclusion: success`，提交步骤与 AUR 发布步骤均为 `success` |
+| AUR 首发 | `git push origin master` 返回 `* [new branch] master -> master`；AUR 仓库 HEAD `233c078`；包页面 HTTP 200 且显示 `workdaddy-bin 1.2.22-1`、`AGPL-3.0-or-later`；远端 4 个文件与本地 SHA-256 逐项一致 |
+| 端到端闭环 | Run `43681612115`，`conclusion: success`；日志显示 `AUR_SSH_PRIVATE_KEY: ***` 已注入、`Cloning into ...` 成功、`AUR already matches local files (version 1.2.22); nothing to push`，无 `Permission denied (publickey)` |
+
+AUR RPC 索引在首发后未即时刷新（`type=info` 仍返回 `resultcount:0`），包页面与 git 仓库已生效；`yay` / `paru` 等依赖 RPC 的客户端需等待 AUR 索引更新后才能搜到该包。
 
 ---
 
