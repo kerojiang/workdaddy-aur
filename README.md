@@ -65,13 +65,14 @@ ArchWiki《[AUR submission guidelines](https://wiki.archlinux.org/title/AUR_subm
 
 本包直接解包上游官方预编译 DEB 的 `data.tar.xz`，不本地编译，因此必须带 `-bin`。官方 DEB 的 control 归档中只有 `./control`、没有 maintainer scripts，所以解包时无需模拟 dpkg 维护脚本。
 
-### 本包改动（pkgrel ≥ 4，pkgrel 5 起不再依赖 `patch` 命令）
+### 本包改动（pkgrel ≥ 4；5 起不再依赖 `patch` 命令；6 修复图标解析）
 
-两处改动直接写在 `PKGBUILD` 的 `package()` 里：图标用 `sed` 单行替换，退出守卫用 heredoc 片段经 `sed r` 插入到 `startClientRunningMonitor();` 之后。**不使用 `patch` 可执行文件、不引入额外 source 文件**——pkgrel 4 曾因 `patch` 命令缺失导致用户构建失败（`/var/log/pacman.log` 15:49 需手动安装 `core/patch`），pkgrel 5 已在「`patch: NOT FOUND`」环境下用 `makepkg -f --nodeps --noconfirm` 完整构建通过。
+三处改动直接写在 `PKGBUILD` 的 `package()` 里：图标回退用 `sed` 单行替换，退出守卫用 heredoc 片段经 `sed r` 插入到 `startClientRunningMonitor();` 之后，图标补装用两条 `install -Dm644` 复制包内自带资源。**不使用 `patch` 可执行文件、不引入额外 source 文件、不引入图像工具**——pkgrel 4 曾因 `patch` 命令缺失导致用户构建失败（`/var/log/pacman.log` 15:49 需手动安装 `core/patch`），pkgrel 5、6 均在「`patch: NOT FOUND`」环境下用 `makepkg -f --nodeps --noconfirm` 完整构建通过。
 
 | 改动 | 解决的问题 | 细节 |
 | --- | --- | --- |
-| 默认图标 | 桌面启动器图标空白 | 上游 `scripts/install-desktop-linux.sh:24` 引用 `~/.local/share/workdaddy/icons/workdaddy-launcher.png`，但整个 payload 没有任何脚本会生成该文件；缺失时回退 `Icon=workbuddy`，而 `workbuddy-agent` 提供客户端时系统不存在该图标名。改为回退 `workdaddy`——官方 DEB 自带 `/usr/share/icons/hicolor/1024x1024/apps/workdaddy.png`，本包必然安装 |
+| 默认图标（回退值） | 用户级启动器显示 WorkBuddy 的图标而非 WorkDaddy 自己的 | 上游 `scripts/install-desktop-linux.sh:24` 引用 `~/.local/share/workdaddy/icons/workdaddy-launcher.png`，但整个 payload 没有任何脚本会生成该文件；缺失时回退 `Icon=workbuddy`。改为回退 `workdaddy`，与官方 `/usr/share/applications/workdaddy.desktop` 一致 |
+| 默认图标（补装，pkgrel 6） | `Icon=workdaddy` 解析失败、图标空白 | 官方 DEB 只提供 `/usr/share/icons/hicolor/1024x1024/apps/workdaddy.png`，而 `hicolor/index.theme` 的 `Directories` 不声明 `1024x1024`（实测 `grep -c 1024x1024` = 0，最大 `512x512`），按 XDG 图标查找规范该目录不参与查找。实测 `kiconfinder6 workdaddy` 返回空，`kiconfinder6 workbuddy` 返回 `workbuddy-agent` 提供的 `48x48/apps/workbuddy.png`。pkgrel 6 把同一份 PNG 复制到 `512x512/apps/`、把包内 `assets/workdaddy-app-icon-source.svg` 复制到 `scalable/apps/`，两者都在索引内；临时主题实验下 `kiconfinder6 workdaddy` 立即返回 `512x512/apps/workdaddy.png`。安装由 `gtk-update-icon-cache.hook` 自动重建缓存 |
 | 退出守卫 | WorkBuddy 退出后 daemon 常驻不退 | 上游 daemon 由 `install-linux.sh:224` 的 `setsid nohup` 脱离进程树，且 `daemon.js` 没有任何「客户端退出 → 自杀」逻辑。守卫复用既有 `clientRunningState`（15s 周期探测 `linuxWorkBuddyPids`，按 argv0/realpath 精确匹配）：启动宽限 5 分钟 → 连续 4 次探测为 false（约 60s）→ 走 SIGTERM 清理流程退出。探测失败(null)与数据过旧不判定，单次误报自动清零 |
 
 守卫环境变量：`WORKDADDY_EXIT_GUARD=0` 关闭；`WORKDADDY_EXIT_GUARD_GRACE_MS` / `WORKDADDY_EXIT_GUARD_INTERVAL_MS` 调整宽限与轮询间隔。`scripts/sync-release.py` 只重写 DEB 的 `sha256sums_x86_64/aarch64` 两行，不触碰 `package()` 内的改动，版本升级时自动保留。
@@ -84,7 +85,7 @@ ArchWiki《[AUR submission guidelines](https://wiki.archlinux.org/title/AUR_subm
 
 | 文件 | 作用 |
 | --- | --- |
-| `PKGBUILD` | 解包对应架构的官方 DEB，用 sed 应用两处改动（默认图标回退 + 退出守卫），并安装上游许可证到 `/usr/share/licenses/workdaddy-bin/LICENSE` |
+| `PKGBUILD` | 解包对应架构的官方 DEB，用 sed 应用两处脚本改动（默认图标回退 + 退出守卫）、补装 hicolor 图标，并安装上游许可证到 `/usr/share/licenses/workdaddy-bin/LICENSE` |
 | `.SRCINFO` | 由 `makepkg --printsrcinfo` 生成，AUR 必需 |
 | `LICENSE` | 本仓库 PKGBUILD 与脚本的 0BSD 许可证 |
 | `LICENSE.upstream` | 上游 tag `1.2.22` 的 LICENSE 原文，随包安装 |
