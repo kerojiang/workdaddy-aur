@@ -5,7 +5,7 @@
 把 [babygoton/WorkDaddy](https://github.com/babygoton/WorkDaddy) 官方 Linux DEB 重打包为 Arch Linux AUR 包 **`workdaddy-bin`**，并由 GitHub Actions **每天检查一次**上游 Release：发现新版本后自动更新 `PKGBUILD` / `.SRCINFO`、提交回本仓库、推送到 AUR。
 
 - 上游：<https://github.com/babygoton/WorkDaddy>
-- AUR 页面：<https://aur.archlinux.org/packages/workdaddy-bin>（当前 `1.2.22-2`，维护者 `kerojiang`）
+- AUR 页面：<https://aur.archlinux.org/packages/workdaddy-bin>（当前 `1.2.22-3`，维护者 `kerojiang`）
 - 上游许可证：`AGPL-3.0-or-later`；本仓库打包脚本许可证：`0BSD`
 
 > **范围**：仅 WorkDaddy 主版本（`WorkDaddy_<版本>_amd64.deb` / `_arm64.deb`）。上游 Release 中的 WorkDaddy-AI、CodeDaddy、CodeDaddy-CN 一律不打包。
@@ -39,7 +39,23 @@ makepkg -si
 
 依据：两个 AUR 包的 `package()` 都安装 `/usr/bin/workbuddy` → `/opt/WorkBuddy/workbuddy` 与 `usr/share/applications/workbuddy.desktop`；上游 README 第 143 行「请先安装并登录同架构的官方客户端」、第 256 行「不修改 WorkBuddy 二进制」；官方 DEB `control` 的 `Depends` 不含 WorkBuddy 客户端。`PKGBUILD(5)` 原文：*"optdepends are currently for informational purposes only and are not utilized by pacman during dependency resolution."* —— 因此只能双列提示，不能让 pacman 自动把其中一个解析为另一个；两个包的 `provides=()` 均为空，也不存在可用的虚拟包名。
 
-运行时依赖由 `PKGBUILD` 的 `depends` 声明：`bash`、`ca-certificates`、`curl`、`gcc-libs`、`glibc`、`hicolor-icon-theme`、`procps-ng`、`util-linux`、`xdg-utils`、`zenity`。
+运行时依赖由 `PKGBUILD` 的 `depends` 声明：`bash`、`ca-certificates`、`curl`、`gcc-libs`、`glibc`、`hicolor-icon-theme`、`procps-ng`、`util-linux`、`xdg-utils`。
+
+### `zenity` 是可选依赖
+
+官方 DEB 的 `control` 与上游 `scripts/build-linux-deb.sh:159` 把 `zenity` 写进 `Depends`；但 Arch `extra/zenity` 4.2.2 的 `depends` 为 `['glib2', 'glibc', 'gtk4', 'hicolor-icon-theme', 'libadwaita', 'libgcc', 'pango']`，会拉入一整串 GTK4/libadwaita 依赖。`PKGBUILD(5)` 对 `optdepends` 的定义是 *"not essential for base functionality, but may be necessary to make full use of the contents of this package"*，因此本包把 `zenity` 从 `depends` 移到 `optdepends`，不强制安装。
+
+官方 payload 中 `zenity` 共 17 处引用，集中在 `scripts/launch-gui-linux.sh` 与 `scripts/wallpaper-rotation.js`；启动器自身有无 zenity 降级路径（`launch-gui-linux.sh:31` 用 `command -v zenity` 探测，`:35` 无图形会话时主动置空）。未安装 zenity 时的实际行为：
+
+| 位置 | 行为 |
+| --- | --- |
+| `launch-gui-linux.sh:90` `run_action` | 同步执行命令，无进度条，功能正常 |
+| `:110` / `:120` `show_result` / `fail_result` | 输出改为 `printf`；`.desktop` 为 `Terminal=false`，桌面双击时看不到启动结果与报错 |
+| `:129` `confirm_restart` | `return 0` 等同同意重启：**不再弹确认框就重启 WorkBuddy 窗口**，当前窗口被关闭，未保存的对话内容不在脚本保护范围内 |
+| `:255` 主菜单 | 退化为终端文本菜单；桌面图标传参 `cn` 不走该分支 |
+| `wallpaper-rotation.js:263` | 无降级，`execFile('zenity')` 失败，壁纸目录选择按钮失效，手动填写路径仍可用 |
+
+需要完整图形启动器时执行 `pacman -S zenity`。
 
 ### 为什么包名带 `-bin`
 
@@ -117,7 +133,7 @@ AUR 推送只走 SSH 公钥认证，不使用账号密码。ArchWiki 原文：
 >
 > *"The AUR only allows pushes to the master branch."*
 
-**当前状态**：`workdaddy-bin 1.2.22-2` 已发布（首发为 `1.2.22-1`，AUR 首发提交 `233c078`）。首发使用本机 `~/.ssh/aur`，该密钥已绑定 AUR 账号 `kerojiang`（`ssh -T aur@aur.archlinux.org` 返回 `Welcome to AUR, kerojiang!`）。同一把私钥已用 libsodium sealed box 加密写入 GitHub Actions Secret `AUR_SSH_PRIVATE_KEY`（GitHub API 返回 `201 Created`），GitHub runner 用它成功 clone 了 AUR 仓库（Run `43681612115` 日志：`AUR_SSH_PRIVATE_KEY: ***`、`Cloning into ...`、`AUR already matches local files`）。
+**当前状态**：`workdaddy-bin 1.2.22-3` 已发布（首发为 `1.2.22-1`，AUR 首发提交 `233c078`）。首发使用本机 `~/.ssh/aur`，该密钥已绑定 AUR 账号 `kerojiang`（`ssh -T aur@aur.archlinux.org` 返回 `Welcome to AUR, kerojiang!`）。同一把私钥已用 libsodium sealed box 加密写入 GitHub Actions Secret `AUR_SSH_PRIVATE_KEY`（GitHub API 返回 `201 Created`），GitHub runner 用它成功 clone 了 AUR 仓库（Run `43681612115` 日志：`AUR_SSH_PRIVATE_KEY: ***`、`Cloning into ...`、`AUR already matches local files`）。
 
 | Secret | 状态 | 说明 |
 | --- | --- | --- |
@@ -160,6 +176,7 @@ WORKDADDY_DEB_DIR=/path/to/debs python3 scripts/sync-release.py --repo-root .
 | CI 发现更新路径 | Run `43680284204`（`force=true` 模拟），`conclusion: success`，提交步骤与 AUR 发布步骤均为 `success` |
 | AUR 首发 | `git push origin master` 返回 `* [new branch] master -> master`；AUR 仓库 HEAD `233c078`；包页面 HTTP 200 且显示 `workdaddy-bin 1.2.22-1`、`AGPL-3.0-or-later`；远端 4 个文件与本地 SHA-256 逐项一致 |
 | 端到端闭环 | Run `43681612115`，`conclusion: success`；日志显示 `AUR_SSH_PRIVATE_KEY: ***` 已注入、`Cloning into ...` 成功、`AUR already matches local files (version 1.2.22); nothing to push`，无 `Permission denied (publickey)` |
+| zenity 移出硬依赖 | `depends` 移除 `zenity`（实构产物 `.PKGINFO` 的 9 条 `depend` 无 zenity），`optdepends` 增第 3 条并写明启动器弹窗/重启确认/壁纸目录选择用途；回归确认升级后三条 `optdepends` 全部保留。Arch `zenity` 4.2.2 依赖 `gtk4`/`libadwaita`/`pango`，移除后不再强制拉入该依赖链 |
 | optdepends 双列 | 本次把 `workbuddy-agent` 列为 `workbuddy` 的替代客户端，并按 `PKGBUILD(5)`「incremented for intermediate PKGBUILD updates」将 `pkgrel` 递增至 2；`makepkg -f --nodeps --noconfirm` 产物 `.PKGINFO` 含两条 `optdepend`：`workbuddy`、`workbuddy-agent`；无 `control.tar` / `debian-binary` / `data.tar` 残留。GitHub commit `93f7eee`；CI Run `43682922558` `conclusion: success`，日志 `233c078..ef05a74 master -> master`、`pushed workdaddy-bin 1.2.22 to AUR`；AUR HEAD `ef05a74`，4 个文件与本地 SHA-256 一致；包页面 HTTP 200 显示 `1.2.22-2` 且含 `workbuddy-agent` |
 
 AUR RPC 索引在首发后未即时刷新（`type=info` 仍返回 `resultcount:0`），包页面与 git 仓库已生效；`yay` / `paru` 等依赖 RPC 的客户端需等待 AUR 索引更新后才能搜到该包。
