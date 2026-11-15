@@ -80,9 +80,9 @@ ArchWiki《[AUR submission guidelines](https://wiki.archlinux.org/title/AUR_subm
 
 | 文件 | 作用 |
 | --- | --- |
-| `PKGBUILD` | 解包对应架构的官方 DEB，应用 `patches/` 下两个补丁，并安装上游许可证到 `/usr/share/licenses/workdaddy-bin/LICENSE` |
-| `patches/workdaddy-default-icon.patch` | 启动器图标回退到系统 hicolor 的 workdaddy 图标 |
-| `patches/workdaddy-exit-guard.patch` | WorkBuddy 退出后 daemon 自动完全退出（可环境变量关闭） |
+| `PKGBUILD` | 解包对应架构的官方 DEB，应用 两个补丁，并安装上游许可证到 `/usr/share/licenses/workdaddy-bin/LICENSE` |
+| `workdaddy-default-icon.patch` | 启动器图标回退到系统 hicolor 的 workdaddy 图标 |
+| `workdaddy-exit-guard.patch` | WorkBuddy 退出后 daemon 自动完全退出（可环境变量关闭） |
 | `.SRCINFO` | 由 `makepkg --printsrcinfo` 生成，AUR 必需 |
 | `LICENSE` | 本仓库 PKGBUILD 与脚本的 0BSD 许可证 |
 | `LICENSE.upstream` | 上游 tag `1.2.22` 的 LICENSE 原文，随包安装 |
