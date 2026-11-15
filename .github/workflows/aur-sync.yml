@@ -2,8 +2,9 @@ name: Sync WorkDaddy release to AUR
 
 on:
   schedule:
-    # Every 3 hours. GitHub may delay scheduled runs under load.
-    - cron: '23 */3 * * *'
+    # Once per day at 03:23 UTC (11:23 Asia/Shanghai). GitHub schedules in UTC
+    # and may delay runs at the top of the hour, so avoid minute 0.
+    - cron: '23 3 * * *'
   workflow_dispatch:
     inputs:
       force:
